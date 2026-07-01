@@ -25,6 +25,7 @@ from hdl_registers.generator.html.page import HtmlPageGenerator
 from hdl_registers.generator.html.register_table import HtmlRegisterTableGenerator
 from hdl_registers.generator.python.accessor import PythonAccessorGenerator
 from hdl_registers.generator.python.pickle import PythonPickleGenerator
+from hdl_registers.generator.rust.rust_flat import RustFlatGenerator
 from hdl_registers.generator.vhdl.axi_lite.wrapper import VhdlAxiLiteWrapperGenerator
 from hdl_registers.generator.vhdl.record_package import VhdlRecordPackageGenerator
 from hdl_registers.generator.vhdl.register_package import VhdlRegisterPackageGenerator
@@ -109,3 +110,12 @@ def test_can_generate_python_without_error(tmp_path, register_list):
 
     PythonAccessorGenerator(register_list, tmp_path).create()
     assert (tmp_path / f"{register_list.name}_accessor.py").exists()
+
+
+@pytest.mark.parametrize("register_list", REGISTER_LISTS)
+def test_can_generate_rust_flat_without_error(tmp_path, register_list):
+    RustFlatGenerator(register_list, tmp_path).create()
+    assert (tmp_path / f"{register_list.name}_flat.rs").exists()
+
+    RustFlatGenerator(register_list, tmp_path, file_name="apa.rs").create()
+    assert (tmp_path / "apa.rs").exists()

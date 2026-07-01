@@ -79,6 +79,12 @@ The following code can be generated:
 * `C header <https://hdl-registers.com/rst/generator/generator_c.html>`_
   with register addresses and field information.
 
+* `Rust (flat) <https://hdl-registers.com/rst/generator/generator_rust_flat.html>`_
+
+  * Register file represented as a (flat) struct.
+    Getters and setters in struct implementation.
+  * Trait-based register accessing.
+
 * `HTML <https://hdl-registers.com/rst/generator/generator_html.html>`_
   website with documentation of registers and fields.
 

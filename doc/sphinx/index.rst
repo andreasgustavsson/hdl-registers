@@ -55,6 +55,7 @@
     rst/generator/generator_cpp
     rst/generator/generator_html
     rst/generator/generator_python
+    rst/generator/generator_rust_flat
     rst/generator/generator_systemverilog
     rst/generator/generator_vhdl
 
@@ -76,6 +77,7 @@
     rst/api_reference/hdl_registers.generator.cpp
     rst/api_reference/hdl_registers.generator.html
     rst/api_reference/hdl_registers.generator.python
+    rst/api_reference/hdl_registers.generator.rust
     rst/api_reference/hdl_registers.generator.systemverilog
     rst/api_reference/hdl_registers.generator.systemverilog.axi_lite
     rst/api_reference/hdl_registers.generator.vhdl
