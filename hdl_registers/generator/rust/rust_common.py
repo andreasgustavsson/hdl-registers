@@ -123,8 +123,10 @@ class RustGeneratorCommon(RegisterCodeGenerator):
 /// # Safety
 /// The implementer must ensure the safety of the implementation.
 pub trait {self._struct_name}Accessor {{
-{ind}fn read32(&self, offset: usize) -> Result<u32, &'static str>;
-{ind}fn write32(&mut self, offset: usize, val: u32) -> Result<(), &'static str>;
+{ind}type Error;
+
+{ind}fn read32(&self, offset: usize) -> Result<u32, Self::Error>;
+{ind}fn write32(&mut self, offset: usize, val: u32) -> Result<(), Self::Error>;
 }}
 """
 

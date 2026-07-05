@@ -58,68 +58,116 @@ def test_write_only_register_has_no_getters(rust_test_toml_code):
 
 def test_accessor_trait(rust_test_toml_code):
     assert "pub trait TestFlatAccessor {" in rust_test_toml_code
+    assert "type Error;" in rust_test_toml_code
     assert (
-        "fn read32(&self, offset: usize) -> Result<u32, &'static str>;"
+        "fn read32(&self, offset: usize) -> Result<u32, Self::Error>;"
         in rust_test_toml_code
     )
     assert (
-        "fn write32(&mut self, offset: usize, val: u32) -> Result<(), &'static str>;"
+        "fn write32(&mut self, offset: usize, val: u32) -> Result<(), Self::Error>;"
         in rust_test_toml_code
     )
+
+    def test_error_enum(rust_test_toml_code):
+        assert f"pub enum {self._struct_name}Error {{" in rust_test_toml_code
+        assert "InvalidSigned { got: i32, min: i32, max: i32 }," in rust_test_toml_code
+        assert (
+            "InvalidUnsigned { got: u32, min: u32, max: u32 }," in rust_test_toml_code
+        )
+        assert "InvalidFloat { got: f64, min: f64, max: f64 }," in rust_test_toml_code
 
 
 def test_struct_presence(rust_test_toml_code):
-    assert "pub struct TestFlat<A: TestFlatAccessor> {" in rust_test_toml_code
-    assert "accessor: A," in rust_test_toml_code
+    assert "pub struct TestFlat<A>" in rust_test_toml_code
+    assert " A: TestFlatAccessor," in rust_test_toml_code
+    assert " A::Error: From<TestFlatError>," in rust_test_toml_code
+    assert " accessor: A," in rust_test_toml_code
 
 
 def test_struct_impl_presence(rust_test_toml_code):
-    assert "impl<A: TestFlatAccessor> TestFlat<A> {" in rust_test_toml_code
+    assert "impl<A> TestFlat<A>" in rust_test_toml_code
+    assert " A: TestFlatAccessor," in rust_test_toml_code
+    assert " A::Error: From<TestFlatError>," in rust_test_toml_code
     assert "pub const fn new(accessor: A)" in rust_test_toml_code
-    assert "Self { accessor }" in rust_test_toml_code
+    assert " Self { accessor }" in rust_test_toml_code
 
 
 @pytest.mark.parametrize(
-    "register_mode,field_type,field_width,field_default,val_min,val_max",
+    "register_mode,field_type,field_width,field_default,val_min,val_max,assert_min,assert_max",
     [
-        # Bit fields (bool) should not be range-checked at all
-        ("r", "bit", 1, 1 * "0", None, None),
-        ("w", "bit", 1, 1 * "0", None, None),
-        # Integer fields should be checked against both limits on both reads and writes,
-        # but not on reads if value range covers the entire field,
-        # and lower limit should not be checked on writes of an unsigned int if limit i 0.
-        ("r", "integer", None, 3, -34, 57),
-        ("r", "integer", None, 0, 0, 255),
-        ("r", "integer", None, 3, -256, 255),
-        ("w", "integer", None, 3, -34, 57),
-        ("w", "integer", None, 35, 34, 57),
-        ("w", "integer", None, 35, 0, 255),
-        ("w", "integer", None, 35, -256, 255),
-        ("w", "integer", None, 35, -(1 << 31), (1 << 31) - 1),
-        ("w", "integer", None, 35, 0, (1 << 32) - 1),
-        ("w", "integer", None, 35, -(1 << 31), (1 << 31) - 2),
-        ("w", "integer", None, 35, 0, (1 << 32) - 2),
-        ("w", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 1),
-        ("w", "integer", None, 35, 1, (1 << 32) - 1),
-        # Bit vector (unsigned) fields should be checked against upper limit on write
-        ("r", "bit_vector_unsigned", 4, 4 * "0", None, None),
-        ("w", "bit_vector_unsigned", 4, 4 * "0", None, 15),
-        ("w", "bit_vector_unsigned", 32, 32 * "0", None, None),
-        # Bit vector (signed) fields should be checked against both limits on write
-        ("r", "bit_vector_signed", 4, 4 * "0", None, None),
-        ("w", "bit_vector_signed", 4, 4 * "0", -8, 7),
-        ("w", "bit_vector_signed", 32, 32 * "0", None, None),
-        # Enumeration fields should be checked against upper limits on reads,
-        # but that is done by the enumeration's from_u32()
-        # field_wdith = items
-        ("r", "enumeration", {"aa": "", "bb": "", "cc": ""}, "bb", None, None),
-        ("w", "enumeration", {"aa": "", "bb": "", "cc": ""}, "bb", None, None),
-        # Bit vector floats should be range checked against both limits on writes
-        # default = -numerical_interpretation.min_bit_index
-        ("r", "bit_vector_unsigned_float", 4, 2, None, None),
-        ("w", "bit_vector_unsigned_float", 4, 2, 0.0, 3.75),
-        ("r", "bit_vector_signed_float", 4, 2, None, None),
-        ("w", "bit_vector_signed_float", 4, 2, -2.0, 1.75),
+        # Bit fields (type bool)
+        ("r", "bit", 1, 1 * "0", None, None, False, False),
+        ("w", "bit", 1, 1 * "0", None, None, False, False),
+        # Enumeration
+        # field_wdith is used for items
+        (
+            "r",
+            "enumeration",
+            {"aa": "", "bb": ""},
+            "bb",
+            0,
+            1,
+            False,
+            False,
+        ),
+        (
+            "w",
+            "enumeration",
+            {"aa": "", "bb": ""},
+            "bb",
+            0,
+            1,
+            False,
+            False,
+        ),
+        (
+            "r",
+            "enumeration",
+            {"aa": "", "bb": "", "cc": ""},
+            "bb",
+            0,
+            2,
+            False,
+            True,
+        ),
+        (
+            "w",
+            "enumeration",
+            {"aa": "", "bb": "", "cc": ""},
+            "bb",
+            0,
+            2,
+            False,
+            False,
+        ),
+        # Integer fields
+        ("r", "integer", None, 3, -34, 57, True, True),
+        ("r", "integer", None, 0, 0, 255, False, False),
+        ("r", "integer", None, 3, -256, 255, False, False),
+        ("w", "integer", None, 3, -34, 57, True, True),
+        ("w", "integer", None, 35, 34, 57, True, True),
+        ("w", "integer", None, 35, 0, 255, False, True),
+        ("w", "integer", None, 35, -256, 255, True, True),
+        ("w", "integer", None, 35, -(1 << 31), (1 << 31) - 1, False, False),
+        ("w", "integer", None, 35, 0, (1 << 32) - 1, False, False),
+        ("w", "integer", None, 35, -(1 << 31), (1 << 31) - 2, False, True),
+        ("w", "integer", None, 35, 0, (1 << 32) - 2, False, True),
+        ("w", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 1, True, False),
+        ("w", "integer", None, 35, 1, (1 << 32) - 1, True, False),
+        # Bit vector (unsigned)
+        ("r", "bit_vector_unsigned", 4, 4 * "0", None, None, False, False),
+        ("w", "bit_vector_unsigned", 4, 4 * "0", None, 15, False, True),
+        ("w", "bit_vector_unsigned", 32, 32 * "0", None, None, False, False),
+        # Bit vector (signed)
+        ("r", "bit_vector_signed", 4, 4 * "0", None, None, False, False),
+        ("w", "bit_vector_signed", 4, 4 * "0", -8, 7, True, True),
+        ("w", "bit_vector_signed", 32, 32 * "0", None, None, False, False),
+        # Bit vector fixed-point
+        # default is used for -numerical_interpretation.min_bit_index
+        ("r", "bit_vector_unsigned_float", 4, 2, None, None, False, False),
+        ("w", "bit_vector_unsigned_float", 4, 2, 0.0, 3.75, True, True),
+        ("r", "bit_vector_signed_float", 4, 2, None, None, False, False),
+        ("w", "bit_vector_signed_float", 4, 2, -2.0, 1.75, True, True),
     ],
 )
 def test_range_check(
@@ -129,6 +177,8 @@ def test_range_check(
     field_default,
     val_min,
     val_max,
+    assert_min,
+    assert_max,
 ):
     class Checker:
         def __init__(self, mode: str):
@@ -180,17 +230,25 @@ def test_range_check(
                 min_check: Any,
                 max_check: Any,
             ):
-                min_check_str = f"if field_val < {val_min} {{"
-                max_check_str = f"if {val_max} < field_val {{"
-                if min_check:
-                    assert f"{min_check_str}" in rust_code
+                minmax_check_str = (
+                    f"if !({val_min}..={val_max}).contains(&{field_var}) {{"
+                )
+                min_check_str = f"if {field_var} < {val_min} {{"
+                max_check_str = f"if {val_max} < {field_var} {{"
+                minmax_check = min_check and max_check
+                if minmax_check:
+                    assert minmax_check_str in rust_code
                 else:
-                    assert f"{min_check_str}" not in rust_code
+                    assert minmax_check_str not in rust_code
+                    if min_check:
+                        assert min_check_str in rust_code
+                    else:
+                        assert min_check_str not in rust_code
 
-                if max_check:
-                    assert f"{max_check_str}" in rust_code
-                else:
-                    assert f"{max_check_str}" not in rust_code
+                    if max_check:
+                        assert max_check_str in rust_code
+                    else:
+                        assert max_check_str not in rust_code
 
             code = self.get_rust(field=field)
             _check(
@@ -208,8 +266,6 @@ def test_range_check(
             default_value=field_default,
             description="",
         )
-        test_min = val_min is not None
-        test_max = val_max is not None
     elif field_type == "bit_vector_unsigned":
         field = checker.register.append_bit_vector(
             name="a",
@@ -218,10 +274,6 @@ def test_range_check(
             description="",
             numerical_interpretation=Unsigned(bit_width=field_width),
         )
-        test_min = val_min is not None and val_min > 0
-        test_max = val_max is not None and (
-            field.width < 32 or val_max < (1 << field.width) - 1
-        )
     elif field_type == "bit_vector_signed":
         field = checker.register.append_bit_vector(
             name="a",
@@ -229,12 +281,6 @@ def test_range_check(
             default_value=field_default,
             description="",
             numerical_interpretation=Signed(bit_width=field_width),
-        )
-        test_min = val_min is not None and (
-            field.width < 32 or val_min > -(1 << (field.width - 1))
-        )
-        test_max = val_max is not None and (
-            field.width < 32 or val_max < (1 << (field.width - 1)) - 1
         )
     elif field_type == "bit_vector_unsigned_float":
         field = checker.register.append_bit_vector(
@@ -247,8 +293,6 @@ def test_range_check(
                 min_bit_index=-field_default,
             ),
         )
-        test_min = val_min is not None
-        test_max = val_max is not None
     elif field_type == "bit_vector_signed_float":
         field = checker.register.append_bit_vector(
             name="a",
@@ -260,8 +304,6 @@ def test_range_check(
                 min_bit_index=-field_default,
             ),
         )
-        test_min = val_min is not None
-        test_max = val_max is not None
     elif field_type == "enumeration":
         field = checker.register.append_enumeration(
             name="a",
@@ -269,8 +311,6 @@ def test_range_check(
             default_value=field_default,
             description="",
         )
-        test_min = False
-        test_max = len(field_width).bit_count() == 1
     elif field_type == "integer":
         if val_min is None and val_max is None:
             field = checker.register.append_integer(
@@ -300,40 +340,6 @@ def test_range_check(
                 max_value=val_max,
                 description="",
             )
-        # Determine the hardware limits based on signedness and width
-        if field.is_signed:
-            # Two's complement limits for the specific field
-            field_min = -(1 << (field.width - 1))
-            field_max = (1 << (field.width - 1)) - 1
-            # Two's complement limits for a full 32-bit register
-            reg_min = -(1 << 31)
-            reg_max = (1 << 31) - 1
-        else:
-            # Unsigned limits for the specific field
-            field_min = 0
-            field_max = (1 << field.width) - 1
-            # Unsigned limits for a full 32-bit register
-            reg_min = 0
-            reg_max = (1 << 32) - 1
-
-        # Evaluate the test conditions based on the register mode
-        if register_mode == "w":
-            test_max = field.width < 32 or val_max < reg_max
-            if field.is_signed:
-                test_min = field.width < 32 or val_min > reg_min
-            else:
-                test_min = val_min > field_min
-
-        elif register_mode == "r":
-            # On reads: test if the specified limit is stricter than what the field can physically hold
-            test_max = val_max < field_max
-            test_min = val_min > field_min
-
-        else:
-            raise ValueError(
-                f"Cannot handle register mode (use 'r' or 'w'): {register_mode}"
-            )
     else:
         raise ValueError(f"Unknown type: {field_type}")
-
-    checker.check(field, (val_min, val_max, test_min, test_max))
+    checker.check(field, (val_min, val_max, assert_min, assert_max))
