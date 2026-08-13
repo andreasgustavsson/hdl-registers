@@ -103,7 +103,6 @@ class RustGeneratorCommon(RegisterCodeGenerator):
         """
         ind = self._get_indentation(1)
         return f"""\
-#![no_std]
 #![allow(unused)]
 
 """
@@ -158,6 +157,66 @@ pub trait {self._struct_name}Accessor {{
         access = f"""{"Public" if public else "Private"} helper function:
 """
         return f"""\
+{self._get_comment_header(f"{access}Fixed-point rounding (ties are rounded to the even integer), f64 -> f64", base_ind_level)}
+
+{base_ind}/// Rounds a 64-bit floating-point number to the nearest integer value.
+{base_ind}/// Ties are rounded toward the even integer.
+{base_ind}///
+{base_ind}/// * `x`: The floating-point number to round.
+{base_ind}{"pub " if public else ""}fn round_ties_even(x: f64) -> f64 {{
+{base_ind}{ind}let bits = x.to_bits();
+{base_ind}{ind}let sign = bits & (1u64 << 63);
+{base_ind}{ind}let exp = ((bits >> 52) & 0x7ff) as i32;
+{base_ind}{ind}let frac = bits & ((1u64 << 52) - 1);
+{base_ind}{ind}// NaN and infinity.
+{base_ind}{ind}if exp == 0x7ff {{
+{base_ind}{ind}{ind}return x;
+{base_ind}{ind}}}
+{base_ind}{ind}// |x| >= 2^52: all representable values are already integers.
+{base_ind}{ind}if exp >= 1023 + 52 {{
+{base_ind}{ind}{ind}return x;
+{base_ind}{ind}}}
+{base_ind}{ind}// |x| < 0.5: rounds to signed zero.
+{base_ind}{ind}//
+{base_ind}{ind}// Normal numbers with exp < 1022 are < 0.5.
+{base_ind}{ind}// All subnormals (exp == 0) are also < 0.5.
+{base_ind}{ind}if exp < 1022 {{
+{base_ind}{ind}{ind}return f64::from_bits(sign);
+{base_ind}{ind}}}
+{base_ind}{ind}// 0.5 <= |x| < 1.0.
+{base_ind}{ind}if exp == 1022 {{
+{base_ind}{ind}{ind}// Exactly 0.5: tie between 0 and 1.
+{base_ind}{ind}{ind}// Zero is even, so return signed zero.
+{base_ind}{ind}{ind}if frac == 0 {{
+{base_ind}{ind}{ind}{ind}return f64::from_bits(sign);
+{base_ind}{ind}{ind}}}
+{base_ind}{ind}{ind}// Strictly greater than 0.5 -> 1.0.
+{base_ind}{ind}{ind}return if sign == 0 {{ 1.0 }} else {{ -1.0 }};
+{base_ind}{ind}}}
+{base_ind}{ind}// 1.0 <= |x| < 2^52.
+{base_ind}{ind}//
+{base_ind}{ind}// Number of fractional bits.
+{base_ind}{ind}let shift = (1023 + 52 - exp) as u32;
+{base_ind}{ind}let mask = (1u64 << shift) - 1;
+{base_ind}{ind}let fractional = bits & mask;
+{base_ind}{ind}let integer_bits = bits & !mask;
+{base_ind}{ind}let halfway = 1u64 << (shift - 1);
+{base_ind}{ind}// Ties go toward the even integer.
+{base_ind}{ind}let round_up =
+{base_ind}{ind}{ind}fractional > halfway ||
+{base_ind}{ind}{ind}(fractional == halfway && (integer_bits & (1u64 << shift)) != 0);
+{base_ind}{ind}if !round_up {{
+{base_ind}{ind}{ind}return f64::from_bits(integer_bits);
+{base_ind}{ind}}}
+{base_ind}{ind}let magnitude = f64::from_bits(integer_bits & !(1u64 << 63));
+{base_ind}{ind}let rounded = magnitude + 1.0;
+{base_ind}{ind}if sign == 0 {{
+{base_ind}{ind}{ind}rounded
+{base_ind}{ind}}} else {{
+{base_ind}{ind}{ind}-rounded
+{base_ind}{ind}}}
+{base_ind}}}
+
 {self._get_comment_header(f"{access}Fixed-point conversion, f64 -> bit field", base_ind_level)}
 
 {base_ind}/// Converts a floating-point number to a fixed-point bit representation.
@@ -204,7 +263,7 @@ pub trait {self._struct_name}Accessor {{
 {base_ind}{ind});
 {base_ind}{ind}// Scale and Round
 {base_ind}{ind}let scaled_value = value * scale_factor;
-{base_ind}{ind}let rounded_value = scaled_value.round();
+{base_ind}{ind}let rounded_value = Self::round_ties_even(scaled_value);
 {base_ind}{ind}// Bit-cast based on signedness
 {base_ind}{ind}// Since we bounds-checked, these casts are guaranteed to be safe and accurate
 {base_ind}{ind}let raw_bits = if is_signed {{
@@ -453,21 +512,30 @@ pub const {self._constants_prefix}{name_upper}: {int_type}{int_bits} = {constant
 {base_ind}pub enum {enum_name} {{
 """
         for element in field.elements:
+            element_name = self.to_pascal_case(element.name)
+            if element_name == "Error":
+                raise ValueError(
+                    f'An enumeration element cannot be named "Error" (\
+{"" if register_array is None else register_array.name + "."}{register.name}.{field.name}.{element.name})'
+                )
             enum_code += f"""\
-{base_ind}{ind}{self.to_pascal_case(element.name)} = {element.value},
+{base_ind}{ind}{element_name} = {element.value},
 """
         enum_code += f"""\
 {base_ind}}}
-{base_ind}impl {enum_name} {{
-{base_ind}{ind}pub const fn from_u32(val: u32) -> Self {{
+{base_ind}#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+{base_ind}pub struct Unknown{enum_name}Error(pub u32);
+{base_ind}impl TryFrom<u32> for {enum_name} {{
+{base_ind}{ind}type Error = Unknown{enum_name}Error;
+{base_ind}{ind}fn try_from(val: u32) -> Result<Self, Self::Error> {{
 {base_ind}{ind}{ind}match val {{
 """
         for element in field.elements:
             enum_code += f"""\
-{base_ind}{ind}{ind}{ind}{element.value} => Self::{self.to_pascal_case(element.name)},
+{base_ind}{ind}{ind}{ind}{element.value} => Ok(Self::{self.to_pascal_case(element.name)}),
 """
         enum_code += f"""\
-{base_ind}{ind}{ind}{ind}_ => panic!("Invalid value for enum {enum_name}"),
+{base_ind}{ind}{ind}{ind}_ => Err(Unknown{enum_name}Error(val)),
 {base_ind}{ind}{ind}}}
 {base_ind}{ind}}}
 {base_ind}}}

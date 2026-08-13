@@ -68,28 +68,38 @@ def test_accessor_trait(rust_test_toml_code):
         in rust_test_toml_code
     )
 
-    def test_error_enum(rust_test_toml_code):
-        assert f"pub enum {self._struct_name}Error {{" in rust_test_toml_code
-        assert "InvalidSigned { got: i32, min: i32, max: i32 }," in rust_test_toml_code
-        assert (
-            "InvalidUnsigned { got: u32, min: u32, max: u32 }," in rust_test_toml_code
-        )
-        assert "InvalidFloat { got: f64, min: f64, max: f64 }," in rust_test_toml_code
+
+def test_error_enum(rust_test_toml_code):
+    assert f"pub enum TestFlatError<E> {{" in rust_test_toml_code
+    assert "Accessor(E)," in rust_test_toml_code
+    assert (
+        "EnumFromRaw { got: u32, max: u32, name: &'static str }," in rust_test_toml_code
+    )
+    assert "Signed { got: i32, min: i32, max: i32 }," in rust_test_toml_code
+    assert "Unsigned { got: u32, min: u32, max: u32 }," in rust_test_toml_code
+    assert "Float { got: f64, min: f64, max: f64 }," in rust_test_toml_code
+    assert "ArrayIndex { got: usize, max: usize }," in rust_test_toml_code
+    assert "impl<E> From<E> for TestFlatError<E> {" in rust_test_toml_code
+    assert "fn from(e: E) -> Self {" in rust_test_toml_code
+    assert "TestFlatError::Accessor(e)" in rust_test_toml_code
 
 
 def test_struct_presence(rust_test_toml_code):
     assert "pub struct TestFlat<A>" in rust_test_toml_code
     assert " A: TestFlatAccessor," in rust_test_toml_code
-    assert " A::Error: From<TestFlatError>," in rust_test_toml_code
     assert " accessor: A," in rust_test_toml_code
 
 
 def test_struct_impl_presence(rust_test_toml_code):
     assert "impl<A> TestFlat<A>" in rust_test_toml_code
     assert " A: TestFlatAccessor," in rust_test_toml_code
-    assert " A::Error: From<TestFlatError>," in rust_test_toml_code
     assert "pub const fn new(accessor: A)" in rust_test_toml_code
     assert " Self { accessor }" in rust_test_toml_code
+
+
+def test_enum_irq_status_d(rust_test_toml_code):
+    assert "UnknownIrqStatusDError" in rust_test_toml_code
+    assert "impl TryFrom<u32> for IrqStatusD" in rust_test_toml_code
 
 
 @pytest.mark.parametrize(
@@ -128,7 +138,7 @@ def test_struct_impl_presence(rust_test_toml_code):
             0,
             2,
             False,
-            True,
+            False,
         ),
         (
             "w",
@@ -142,8 +152,22 @@ def test_struct_impl_presence(rust_test_toml_code):
         ),
         # Integer fields
         ("r", "integer", None, 3, -34, 57, True, True),
+        ("r", "integer", None, 0, -255, 255, True, False),
+        ("r", "integer", None, 5, 1, 255, True, False),
+        ("r", "integer", None, 0, -256, 254, False, True),
+        ("r", "integer", None, 0, 0, 254, False, True),
+        ("r", "integer", None, 0, -255, 254, True, True),
+        ("r", "integer", None, 5, 1, 254, True, True),
         ("r", "integer", None, 0, 0, 255, False, False),
         ("r", "integer", None, 3, -256, 255, False, False),
+        ("r", "integer", None, 35, -(1 << 31), (1 << 31) - 1, False, False),
+        ("r", "integer", None, 35, 0, (1 << 32) - 1, False, False),
+        ("r", "integer", None, 35, -(1 << 31), (1 << 31) - 2, False, True),
+        ("r", "integer", None, 35, 0, (1 << 32) - 2, False, True),
+        ("r", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 1, True, False),
+        ("r", "integer", None, 35, 1, (1 << 32) - 1, True, False),
+        ("r", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 2, True, True),
+        ("r", "integer", None, 35, 1, (1 << 32) - 2, True, True),
         ("w", "integer", None, 3, -34, 57, True, True),
         ("w", "integer", None, 35, 34, 57, True, True),
         ("w", "integer", None, 35, 0, 255, False, True),
@@ -154,6 +178,8 @@ def test_struct_impl_presence(rust_test_toml_code):
         ("w", "integer", None, 35, 0, (1 << 32) - 2, False, True),
         ("w", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 1, True, False),
         ("w", "integer", None, 35, 1, (1 << 32) - 1, True, False),
+        ("w", "integer", None, 35, -(1 << 31) + 1, (1 << 31) - 2, True, True),
+        ("w", "integer", None, 35, 1, (1 << 32) - 2, True, True),
         # Bit vector (unsigned)
         ("r", "bit_vector_unsigned", 4, 4 * "0", None, None, False, False),
         ("w", "bit_vector_unsigned", 4, 4 * "0", None, 15, False, True),
@@ -219,7 +245,7 @@ def test_range_check(
         def check(
             self,
             field: RegisterField,
-            minmax: tuple[Any, Any, Any, Any],
+            minmax: tuple[Any, Any, Bool, Bool],
         ):
             field_var = "field_val"  # Must correspond to code from generator
 
@@ -227,8 +253,8 @@ def test_range_check(
                 rust_code: str,
                 val_min: Any,
                 val_max: Any,
-                min_check: Any,
-                max_check: Any,
+                min_check: Bool,
+                max_check: Bool,
             ):
                 minmax_check_str = (
                     f"if !({val_min}..={val_max}).contains(&{field_var}) {{"

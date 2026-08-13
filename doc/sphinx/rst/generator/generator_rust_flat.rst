@@ -3,8 +3,8 @@
 Rust flat generator
 ===================
 
-Flat, ``no_std`` Rust code can be generated, containing all information about registers, register arrays, fields
-and constants.
+Flat, ``no_std``-compatible Rust code can be generated, containing all information about registers, register
+arrays, fields and constants.
 The code is generated from the :class:`.RustFlatGenerator` class by calling
 the :meth:`.RegisterCodeGenerator.create` method.
 
@@ -28,7 +28,7 @@ For registers which can be written, two types of write functions are generated: 
 entire register, and one that takes a value (such as ``bool``, ``i32``, ``enum`` or ``f64``, as appropriate)
 and writes it to a specific field.
 The latter type of function internally calls the first function to write the entire register - if
-the register is also readable, then a read-modify-write is performed, otherwise, default values are
+the register is also readable but not pulsed, then a read-modify-write is performed, otherwise, default values are
 written to all other fields.
 
 The generated Rust code provides the user with flexibility in how to implement safe register access.
