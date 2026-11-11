@@ -40,15 +40,15 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-24.04', 'windows-latest', 'macos-latest']
-        py: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        py: ['3.11', '3.12', '3.13', '3.14', '3.15']
     runs-on: ${{ matrix.os }}
     steps:
 
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Setup Python
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ matrix.py }}
         cache: pip
@@ -66,22 +66,22 @@ jobs:
     # Run only the UNIT tests on most Python versions in the matrix.
     # This is very fast (2-3 s).
     - name: Run unit tests
-      if: matrix.os != 'ubuntu-24.04' || matrix.py != '3.14'
+      if: matrix.os != 'ubuntu-24.04' || matrix.py != '3.15'
       run: |
         python3 -m pytest --verbose hdl_registers
 
     # On one Python version however, we run ALL the Python-based tests, which requires a few more
     # dependencies, and then we collect coverage from this run.
     - name: Setup GHDL
-      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.14'
-      uses: ghdl/setup-ghdl@cd27f618fa44ee579660e3a20f98dd806c3f04ca # v1.4.0
+      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.15'
+      uses: ghdl/setup-ghdl@75eff367dadc0cd06454a118db0b458d44fdc3c3 # v1.5.1
 
     - name: Setup Verilator
-      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.14'
+      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.15'
       uses: veryl-lang/setup-verilator@7464f6aacf42efab9a92b9138e9ce16ff1135f69 # v2.0.0
 
     - name: Install further Python packages
-      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.14'
+      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.15'
       run: |
         python3 -m pip install \
           GitPython \
@@ -95,7 +95,7 @@ jobs:
     # Run ALL tests, including unit, lint and functional ones.
     # The execution time goes from 1:13 -> 0:50 when two threads are used.
     - name: Run all tests
-      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.14'
+      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.15'
       run: |
         python3 -m pytest \
           --verbose \
@@ -107,7 +107,7 @@ jobs:
           tests
 
     - name: Upload coverage artifacts
-      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.14'
+      if: matrix.os == 'ubuntu-24.04' && matrix.py == '3.15'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: coverage
@@ -124,12 +124,12 @@ jobs:
     steps:
 
     - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Setup Python
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
-        python-version: '3.14'
+        python-version: '3.15'
         cache: pip
         cache-dependency-path: hdl_registers/requirements_develop.txt
 
@@ -201,7 +201,7 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
 
   # ------------------------------------------------------------------------------
@@ -217,12 +217,12 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           cache: pip
           cache-dependency-path: hdl_registers/requirements_develop.txt
 
@@ -234,7 +234,7 @@ jobs:
         run: python3 -m build
 
       - name: Deploy artifact
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # 1.14.0
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # 1.14.2
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
 
@@ -253,14 +253,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
         matrix:
-          py: ['3.10', '3.11', '3.12', '3.13', '3.14']
+          py: ['3.11', '3.12', '3.13', '3.14', '3.15']
     steps:
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.py }}
 
